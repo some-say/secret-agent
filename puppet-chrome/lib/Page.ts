@@ -23,6 +23,7 @@ import { assert, createPromise } from '@secret-agent/commons/utils';
 import { IBoundLog } from '@secret-agent/interfaces/ILog';
 import { CanceledPromiseError } from '@secret-agent/commons/interfaces/IPendingWaitEvent';
 import IRect from '@secret-agent/interfaces/IRect';
+import * as Path from 'path';
 import { DevtoolsSession } from './DevtoolsSession';
 import { NetworkManager } from './NetworkManager';
 import { Keyboard } from './Keyboard';
@@ -77,6 +78,7 @@ export class Page extends TypedEventEmitter<IPuppetPageEvents> implements IPuppe
 
   protected readonly logger: IBoundLog;
   private closePromise = createPromise();
+  private downloadsByGuid = new Map<string, { emitOnOpener: boolean; url: string }>();
   private readonly registeredEvents: IRegisteredEventListener[];
 
   constructor(
@@ -136,6 +138,8 @@ export class Page extends TypedEventEmitter<IPuppetPageEvents> implements IPuppe
       ['Page.javascriptDialogOpening', this.onJavascriptDialogOpening.bind(this)],
       ['Page.fileChooserOpened', this.onFileChooserOpened.bind(this)],
       ['Page.windowOpen', this.onWindowOpen.bind(this)],
+      ['Page.downloadWillBegin', this.onDownloadWillBegin.bind(this)],
+      ['Page.downloadProgress', this.onDownloadProgress.bind(this)],
     ]);
 
     this.isReady = this.initialize().catch(error => {
@@ -203,15 +207,31 @@ export class Page extends TypedEventEmitter<IPuppetPageEvents> implements IPuppe
     return this.mainFrame.evaluate<T>(expression, false);
   }
 
-  async navigate(url: string, options: { referrer?: string } = {}): Promise<{ loaderId: string }> {
+  async navigate(
+    url: string,
+    options: { referrer?: string } = {},
+  ): Promise<{ loaderId: string; loaderType: 'download' | 'page' }> {
     const navigationResponse = await this.devtoolsSession.send('Page.navigate', {
       url,
       referrer: options.referrer,
       frameId: this.mainFrame.id,
     });
-    if (navigationResponse.errorText) throw new Error(navigationResponse.errorText);
-    await this.framesManager.waitForFrame(navigationResponse, url, true);
-    return { loaderId: navigationResponse.loaderId };
+
+    const { errorText, loaderId } = navigationResponse;
+
+    let didInitiateDownload = false;
+    if (errorText) {
+      didInitiateDownload = await this.waitForPossibleDownloadPrompt(url, loaderId);
+
+      if (!didInitiateDownload) {
+        throw new Error(errorText);
+      }
+    }
+    if (!didInitiateDownload) {
+      await this.framesManager.waitForFrame(navigationResponse, url, true);
+    }
+
+    return { loaderId, loaderType: didInitiateDownload ? 'download' : 'page' };
   }
 
   dismissDialog(accept: boolean, promptText?: string): Promise<void> {
@@ -385,7 +405,10 @@ export class Page extends TypedEventEmitter<IPuppetPageEvents> implements IPuppe
       }
       if (this.mainFrame.isDefaultUrl) {
         // if we're on the default page, wait for a loader to be created before telling the page it's ready
-        await this.mainFrame.waitOn('frame-loader-created', null, 2e3).catch(() => null);
+        await Promise.race([
+          this.waitOn('download-started', null, 2e3).catch(() => null),
+          this.mainFrame.waitOn('frame-loader-created', null, 2e3).catch(() => null),
+        ]);
         if (this.isClosed) return;
       }
       await this.opener.popupInitializeFn(this, this.opener.windowOpenParams);
@@ -457,6 +480,84 @@ export class Page extends TypedEventEmitter<IPuppetPageEvents> implements IPuppe
 
   private onWindowOpen(event: WindowOpenEvent): void {
     this.windowOpenParams = event;
+  }
+
+  private async waitForPossibleDownloadPrompt(url: string, loaderId: string): Promise<boolean> {
+    const canceledNavigation = this.networkManager
+      .getCanceledNavigationRequests()
+      .find(x => x.loaderId === loaderId);
+
+    let isDownloadPrompted = false;
+    if (!this.didUrlPromptDownload(url) && canceledNavigation) {
+      try {
+        // if we get this
+        await this.waitOn('download-started', x => x.url === url, 5e3);
+        isDownloadPrompted = true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    // if the url prompted a download
+    if (this.didUrlPromptDownload(url) && (!this.mainFrame || this.mainFrame.isDefaultUrl)) {
+      this.mainFrame?.onStoppedLoading();
+      isDownloadPrompted = true;
+    }
+    return isDownloadPrompted;
+  }
+
+  private didUrlPromptDownload(url: string): boolean {
+    return [...this.downloadsByGuid.values()].some(x => x.url === url);
+  }
+
+  private onDownloadWillBegin(payload: Protocol.Page.DownloadWillBeginEvent) {
+    let originPage: Page;
+    const isCanceledNavigation = this.networkManager
+      .getCanceledNavigationRequests()
+      .find(x => x.url === payload.url);
+
+    let shouldEmitOnOpener = false;
+    if (this.mainFrame?.isLoaded) {
+      originPage = this;
+    } else if (!this.mainFrame || isCanceledNavigation) {
+      originPage = this.opener;
+      shouldEmitOnOpener = true;
+    }
+
+    if (!originPage) return;
+    this.downloadsByGuid.set(payload.guid, { emitOnOpener: shouldEmitOnOpener, url: payload.url });
+
+    originPage.emit('download-started', {
+      id: payload.guid,
+      suggestedFilename: payload.suggestedFilename,
+      path: Path.join(this.browserContext.downloadsPath, payload.guid),
+      url: payload.url,
+    });
+  }
+
+  private onDownloadProgress(event: Protocol.Page.DownloadProgressEvent) {
+    const download = <IPuppetPageEvents['download-finished']>{
+      id: event.guid,
+      totalBytes: event.totalBytes,
+      canceled: event.state === Protocol.Page.DownloadProgressEventState.Canceled,
+    };
+
+    const isFinished = event.state !== Protocol.Page.DownloadProgressEventState.InProgress;
+
+    const emitter = this.downloadsByGuid.get(download.id)?.emitOnOpener ? this.opener : this;
+
+    if (isFinished) {
+      emitter.emit('download-finished', download);
+    } else {
+      const progress = <IPuppetPageEvents['download-progress']>{
+        ...download,
+        progress: 0,
+      };
+      if (event.totalBytes) {
+        progress.progress = Math.round((event.receivedBytes * 100) / event.totalBytes);
+      }
+      emitter.emit('download-progress', progress);
+    }
   }
 
   private onJavascriptDialogOpening(dialog: JavascriptDialogOpeningEvent): void {

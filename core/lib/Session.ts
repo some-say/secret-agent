@@ -21,6 +21,7 @@ import IViewport from '@secret-agent/interfaces/IViewport';
 import IJsPathResult from '@secret-agent/interfaces/IJsPathResult';
 import ISessionCreateOptions from '@secret-agent/interfaces/ISessionCreateOptions';
 import IGeolocation from '@secret-agent/interfaces/IGeolocation';
+import IDownload, { IDownloadState } from '@secret-agent/interfaces/IDownload';
 import SessionState from './SessionState';
 import AwaitedEventListener from './AwaitedEventListener';
 import GlobalPool from './GlobalPool';
@@ -60,6 +61,7 @@ export default class Session extends TypedEventEmitter<{
   public userProfile?: IUserProfile;
 
   public tabsById = new Map<number, Tab>();
+  public downloadsById = new Map<string, IDownload & Partial<IDownloadState>>();
 
   public get isClosing() {
     return this._isClosing;

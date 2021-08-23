@@ -81,10 +81,12 @@ export async function goto(
   page: IPuppetPage,
   url: string,
   waitOnLifecycle: 'load' | 'DOMContentLoaded' = 'load',
-) {
+): ReturnType<IPuppetPage['navigate']> {
   const nav = page.navigate(url);
   const lifecycle = page.mainFrame.waitOn('frame-lifecycle', ev => ev.name === waitOnLifecycle);
-  await Promise.all([lifecycle, nav, page.mainFrame.waitOn('frame-navigated')]);
+  return await Promise.all([lifecycle, nav, page.mainFrame.waitOn('frame-navigated')]).then(
+    x => x[1],
+  );
 }
 
 export async function setContent(page: IPuppetPage, content: string) {

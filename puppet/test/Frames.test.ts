@@ -459,6 +459,7 @@ describe('Frames', () => {
       await page.click('input[type=submit]');
 
       await expect(page.navigate(server.emptyPage)).resolves.toEqual({
+        loaderType: 'page',
         loaderId: expect.any(String),
       });
     });

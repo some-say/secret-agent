@@ -22,7 +22,7 @@ describe('Pages', () => {
 
   beforeAll(async () => {
     Core.use(CustomBrowserEmulator);
-    const  { browserEngine } = CustomBrowserEmulator.selectBrowserMeta();
+    const { browserEngine } = CustomBrowserEmulator.selectBrowserMeta();
     server = await TestServer.create(0);
     puppet = new Puppet(browserEngine);
     await puppet.start();
@@ -300,7 +300,7 @@ describe('Pages', () => {
         frame.on('frame-navigated', () => resolve());
       });
       await frame.evaluate(`window.stop()`);
-      await expect(navigationPromise).resolves.toBe(undefined);
+      await expect(navigationPromise).resolves.toBeTruthy();
       await expect(loaded).resolves.toBeTruthy();
     });
   });

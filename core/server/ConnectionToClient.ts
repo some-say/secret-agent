@@ -294,12 +294,14 @@ export default class ConnectionToClient extends TypedEventEmitter<{
       }
 
       const session = Session.get(meta.sessionId);
-      session.sessionState.nextCommandMeta = commandMeta;
       if (!session) {
+        if (method === 'close' || method === 'removeEventListener') return;
+
         return new SessionClosedOrMissingError(
           `The requested command (${command}) references a session that is closed or invalid.`,
         );
       }
+      session.sessionState.nextCommandMeta = commandMeta;
 
       return await this[method](meta, ...args);
     }

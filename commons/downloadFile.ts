@@ -60,7 +60,7 @@ export function httpGet(
   return request;
 }
 
-function getRequestOptionsWithProxy(url: string): RequestOptions {
+export function getRequestOptionsWithProxy(url: string): RequestOptions {
   const urlParsed = parse(url);
 
   const options: https.RequestOptions = {

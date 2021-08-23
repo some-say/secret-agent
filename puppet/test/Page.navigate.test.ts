@@ -83,7 +83,7 @@ describe('Page.navigate', () => {
         res.statusCode = 204;
         res.end();
       });
-      await expect(page.goto(`${server.baseUrl}/frames/one-frame.html`)).resolves.toBe(undefined);
+      await expect(page.goto(`${server.baseUrl}/frames/one-frame.html`)).resolves.toBeTruthy();
     });
 
     it('should work with subframes return 204 with domcontentloaded', async () => {
@@ -202,15 +202,15 @@ describe('Page.navigate', () => {
     });
 
     it('should work with self requesting page', async () => {
-      await expect(page.goto(`${server.baseUrl}/self-request.html`)).resolves.toBe(undefined);
+      await expect(page.goto(`${server.baseUrl}/self-request.html`)).resolves.toBeTruthy();
     });
 
     it('should be able to navigate to a page controlled by service worker', async () => {
       await page.goto(`${server.baseUrl}/serviceworkers/fetch/sw.html`);
       await page.evaluate(`window.activationPromise`);
-      await expect(page.goto(`${server.baseUrl}/serviceworkers/fetch/sw.html`)).resolves.toBe(
-        undefined,
-      );
+      await expect(
+        page.goto(`${server.baseUrl}/serviceworkers/fetch/sw.html`),
+      ).resolves.toBeTruthy();
     });
 
     it('should fail when canceled by another navigation', async () => {
@@ -231,9 +231,9 @@ describe('Page.navigate', () => {
       httpsServer.setRoute('/mixedcontent.html', (req, res) => {
         res.end(`<iframe src=${server.emptyPage}></iframe>`);
       });
-      await expect(page.goto(`${httpsServer.baseUrl}/mixedcontent.html`, 'load')).resolves.toBe(
-        undefined,
-      );
+      await expect(
+        page.goto(`${httpsServer.baseUrl}/mixedcontent.html`, 'load'),
+      ).resolves.toBeTruthy();
       expect(page.frames).toHaveLength(2);
     });
   });

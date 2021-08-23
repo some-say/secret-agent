@@ -16,6 +16,7 @@ import IViewport from './IViewport';
 import IGeolocation from './IGeolocation';
 import IDeviceProfile from './IDeviceProfile';
 import IHttp2ConnectSettings from './IHttp2ConnectSettings';
+import IPuppetContext from './IPuppetContext';
 
 export default interface ICorePlugin
   extends ICorePluginMethods,
@@ -116,6 +117,7 @@ export interface IBrowserEmulatorMethods {
   beforeHttpRequest?(request: IHttpResourceLoadDetails): Promise<any> | void;
   beforeHttpResponse?(resource: IHttpResourceLoadDetails): Promise<any> | void;
 
+  onNewPuppetContext?(context: IPuppetContext): Promise<any>;
   onNewPuppetPage?(page: IPuppetPage): Promise<any>;
   onNewPuppetWorker?(worker: IPuppetWorker): Promise<any>;
 

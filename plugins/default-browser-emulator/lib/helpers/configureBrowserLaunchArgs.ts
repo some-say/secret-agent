@@ -1,9 +1,5 @@
-import * as Path from 'path';
-import * as os from 'os';
 import BrowserEngine from '@secret-agent/plugin-utils/lib/BrowserEngine';
 import { defaultScreen } from '../Viewports';
-
-let sessionDirCounter = 0;
 
 export function configureBrowserLaunchArgs(
   engine: BrowserEngine,
@@ -60,12 +56,7 @@ export function configureBrowserLaunchArgs(
   );
 
   if (options.showBrowser) {
-    const dataDir = Path.join(
-      os.tmpdir(),
-      engine.fullVersion.replace('.', '-'),
-      `${String(Date.now()).substr(0, 10)}-${(sessionDirCounter += 1)}`,
-    );
-    engine.launchArguments.push(`--user-data-dir=${dataDir}`); // required to allow multiple browsers to be headed
+    engine.launchArguments.push(`--user-data-dir=${engine.userDataDir}`); // required to allow multiple browsers to be headed
 
     if (!options.disableDevtools) engine.launchArguments.push('--auto-open-devtools-for-tabs');
   } else {

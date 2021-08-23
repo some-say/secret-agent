@@ -26,6 +26,7 @@ import { PluginTypes } from '@secret-agent/interfaces/IPluginTypes';
 import requirePlugins from '@secret-agent/plugin-utils/lib/utils/requirePlugins';
 import IHttp2ConnectSettings from '@secret-agent/interfaces/IHttp2ConnectSettings';
 import IDeviceProfile from '@secret-agent/interfaces/IDeviceProfile';
+import IPuppetContext from '@secret-agent/interfaces/IPuppetContext';
 import Core from '../index';
 
 const DefaultBrowserEmulatorId = 'default-browser-emulator';
@@ -134,6 +135,12 @@ export default class CorePlugins implements ICorePlugins {
 
   public onTlsConfiguration(settings: ITlsSettings): void {
     this.instances.filter(p => p.onTlsConfiguration).forEach(p => p.onTlsConfiguration(settings));
+  }
+
+  public async onNewPuppetContext(context: IPuppetContext): Promise<void> {
+    await Promise.all(
+      this.instances.filter(p => p.onNewPuppetContext).map(p => p.onNewPuppetContext(context)),
+    );
   }
 
   public async onNewPuppetPage(page: IPuppetPage): Promise<void> {
